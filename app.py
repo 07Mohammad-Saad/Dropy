@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import os
+import json
 from flask import Flask, flash, redirect, render_template, request, url_for
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
@@ -8,8 +9,13 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = "your_secret_key_here"  # Change this to a secure random key
 
-# Initialize Firebase Admin SDK using your dropy.json key file
-cred = credentials.Certificate("dropy.json")
+# Initialize Firebase Admin SDK safely (local dropy.json or Render env variable)
+if os.environ.get('FIREBASE_CONFIG'):
+    firebase_config = json.loads(os.environ.get('FIREBASE_CONFIG'))
+    cred = credentials.Certificate(firebase_config)
+else:
+    cred = credentials.Certificate("dropy.json")
+
 firebase_admin.initialize_app(
     cred, {"storageBucket": "dropy-xyz.appspot.com"}  # Replace with your actual Firebase Storage bucket name if different
 )
