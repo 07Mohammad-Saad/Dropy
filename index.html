@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DriveSaver App</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent-color: #38bdf8;
+      --accent-hover: #0284c7;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --input-bg: #0f172a;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+    }
+
+    .header {
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-color);
+      margin-bottom: 6px;
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-color);
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background-color: var(--accent-hover);
+      color: #ffffff;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #statusMessage {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 0.875rem;
+      min-height: 20px;
+    }
+
+    .status-success { color: #4ade80; }
+    .status-loading { color: var(--accent-color); }
+    .status-error { color: #f87171; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="header">
+      <h2>DriveSaver</h2>
+      <p>Save notes & files directly to your Google Drive</p>
+    </div>
+
+    <form id="uploadForm">
+      <div class="form-group">
+        <label for="fileName">File Name</label>
+        <input type="text" id="fileName" required placeholder="e.g. notes.txt">
+      </div>
+
+      <div class="form-group">
+        <label for="fileContent">File Content</label>
+        <textarea id="fileContent" required placeholder="Type your text content here..."></textarea>
+      </div>
+
+      <button type="submit" id="submitBtn">Save to Drive</button>
+    </form>
+
+    <div id="statusMessage"></div>
+  </div>
+
+  <script>
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbwh6nvWnzpm5hcIm_ZApjJVWF7ymDX_9dyVKDxBIjQRCiIfNW9zFNPyMz2O0Z-kIk1O/exec';
+
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const status = document.getElementById('statusMessage');
+      const btn = document.getElementById('submitBtn');
+
+      status.className = 'status-loading';
+      status.innerText = 'Uploading to Drive...';
+      btn.disabled = true;
+
+      const payload = {
+        fileName: document.getElementById('fileName').value,
+        fileContent: document.getElementById('fileContent').value
+      };
+
+      fetch(scriptURL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(() => {
+        status.className = 'status-success';
+        status.innerText = '✓ Saved successfully to your Drive!';
+        document.getElementById('uploadForm').reset();
+      })
+      .catch(error => {
+        status.className = 'status-error';
+        status.innerText = '✕ Error saving file. Try again.';
+        console.error('Error:', error);
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
+    });
+  </script>
+
+</body>
+</html>
