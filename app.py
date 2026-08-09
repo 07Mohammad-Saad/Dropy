@@ -11,7 +11,6 @@ import re
 import json
 import base64
 import os
-import urllib.parse
 
 app = Flask(__name__)
 
@@ -21,16 +20,15 @@ CREATOR_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Multi-Page PDF Editor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #333; text-align: center; }
         .card { background: white; max-width: 1080px; margin: 0 auto; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         input[type="text"], input[type="file"] { width: 90%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button, .whatsapp-btn { background-color: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 15px; text-decoration: none; display: inline-block; }
-        button:hover, .whatsapp-btn:hover { background-color: #0056b3; }
-        .whatsapp-btn { background-color: #25d366; margin-top: 10px; }
-        .whatsapp-btn:hover { background-color: #1ebd59; }
+        button { background-color: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 15px; }
+        button:hover { background-color: #0056b3; }
         
         .global-box-builder { background: #eef6ff; border: 1px solid #b6d4fe; border-radius: 8px; padding: 20px; margin-bottom: 25px; text-align: left; }
         .field-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
@@ -110,8 +108,7 @@ CREATOR_HTML = """
         <div class="success">
             <h3>✅ Shareable Link Created!</h3>
             <p>Send this link to your classmate to personalize & download:</p>
-            <input type="text" value="{{ share_url }}" readonly onclick="this.select()" style="text-align: center; font-weight: bold; color: #007bff; margin-bottom: 10px;"><br>
-            <a href="https://api.whatsapp.com/send?text={{ whatsapp_text | urlencode }}" target="_blank" class="whatsapp-btn">💬 Share Link on WhatsApp</a>
+            <input type="text" value="{{ share_url }}" readonly onclick="this.select()" style="text-align: center; font-weight: bold; color: #007bff;">
         </div>
         {% endif %}
     </div>
@@ -324,6 +321,7 @@ STUDENT_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personalize Your Document</title>
     <script>
         function handleStudentInput(element, pageNum, targetIdx) {
@@ -387,34 +385,6 @@ STUDENT_HTML = """
 </html>
 """
 
-SUCCESS_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>PDF Downloaded Successfully</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 500px; margin: 80px auto; padding: 20px; text-align: center; background: #eef2f5; }
-        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h2 { color: #28a745; }
-        p { color: #555; }
-        .whatsapp-btn { background-color: #25d366; color: white; padding: 12px 20px; border-radius: 5px; font-weight: bold; text-decoration: none; display: inline-block; margin-top: 15px; }
-        .whatsapp-btn:hover { background-color: #1ebd59; }
-        .back-link { display: block; margin-top: 20px; color: #007bff; text-decoration: none; }
-        .back-link:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>🎉 PDF Downloaded Successfully!</h2>
-        <p>Your customized PDF has been generated and downloaded to your device.</p>
-        <p>Want to share this tool or your experience with friends?</p>
-        <a href="https://api.whatsapp.com/send?text={{ whatsapp_share_text | urlencode }}" target="_blank" class="whatsapp-btn">💬 Share on WhatsApp</a>
-        <a href="/doc/{{ doc_id }}" class="back-link">← Back to Form</a>
-    </div>
-</body>
-</html>
-"""
-
 def clean_text(text):
     return re.sub(r'[^\x20-\x7E\n\x0c]', '', text)
 
@@ -457,8 +427,7 @@ def create_link():
         TEMPLATES[doc_id]["page_configs"] = page_configs
         TEMPLATES[doc_id]["header_fields"] = header_fields
         share_url = f"{request.host_url}doc/{doc_id}"
-        whatsapp_text = f"Hey! Customize and download your assignment/notes PDF here: {share_url}"
-        return render_template_string(CREATOR_HTML, share_url=share_url, whatsapp_text=whatsapp_text)
+        return render_template_string(CREATOR_HTML, share_url=share_url)
     
     return "Session expired. Please re-upload.", 400
 
@@ -584,26 +553,12 @@ def download_file(doc_id):
     buffer.seek(0)
 
     clean_filename = header_field_vals.get(0, "student").replace(' ', '_')
-    
-    # We trigger the file download directly via JavaScript or render a success page with download trigger
-    # To keep download working smoothly while showing the success page, we can render the success page 
-    # and provide a direct download button or use standard headers. 
-    # Alternatively, let's serve the download and redirect, or render a success page with a download link.
-    
-    # Let's render the success page which includes a button to download the file directly:
-    tool_url = f"{request.host_url}doc/{doc_id}"
-    whatsapp_share_text = f"I just customized and generated my document using Dropy! Try it out here: {tool_url}"
-
-    return render_template_string(
-        SUCCESS_HTML,
-        doc_id=doc_id,
-        whatsapp_share_text=whatsapp_share_text
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"edited_{clean_filename}.pdf",
+        mimetype="application/pdf"
     )
-
-@app.route("/doc/<doc_id>/file", methods=["GET"])
-def get_pdf_file(doc_id):
-    # This endpoint can be used if they want to download directly if needed, but our PDF generation happens on POST
-    pass
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
