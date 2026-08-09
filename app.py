@@ -726,8 +726,8 @@ def download_personalized_file(doc_id, file_token):
         io.BytesIO(pdf_bytes),
         mimetype='application/pdf',
         as_attachment=True,
-        download_name='personalized_practical.pdf'
+        download_name="personalized_document.pdf"
     )
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
