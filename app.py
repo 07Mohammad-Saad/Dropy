@@ -724,10 +724,10 @@ def download_personalized_file(doc_id, file_token):
     pdf_bytes = TEMPLATES[doc_id]["generated_files"][file_token]
     return send_file(
         io.BytesIO(pdf_bytes),
-        mimetype="application/pdf",
+        mimetype='application/pdf',
         as_attachment=True,
-        download_name="personalized_practical.pdf"
+        download_name='personalized_practical.pdf'
     )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
