@@ -1,8 +1,8 @@
-from flask import Flask, request, render_template_string, send_file
+from flask import Flask, request, render_template_string, send_file, make_response
 from pypdf import PdfReader
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas as pdf_canvas
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib import colors
 import uuid
@@ -20,18 +20,19 @@ CREATOR_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Multi-Page PDF Editor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #333; text-align: center; }
-        .card { background: white; max-width: 1080px; margin: 0 auto; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; background: #eef2f5; margin: 0; padding: 15px; color: #333; text-align: center; box-sizing: border-box; }
+        .card { background: white; max-width: 1080px; margin: 0 auto; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
         input[type="text"], input[type="file"] { width: 90%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
         button { background-color: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 15px; }
         button:hover { background-color: #0056b3; }
         
         .global-box-builder { background: #eef6ff; border: 1px solid #b6d4fe; border-radius: 8px; padding: 20px; margin-bottom: 25px; text-align: left; }
-        .field-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
+        .field-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
         
         .page-editor-block { 
             background: #ffffff; 
@@ -47,29 +48,65 @@ CREATOR_HTML = """
             display: flex;
             gap: 20px;
             align-items: flex-start;
+            flex-wrap: wrap;
         }
         .left-controls {
             flex: 1;
+            min-width: 250px;
             background: #f8f9fa;
             border: 1px solid #dee2e6;
             padding: 15px;
             border-radius: 8px;
+            box-sizing: border-box;
         }
         .right-preview {
             flex: 1.2;
+            min-width: 280px;
             text-align: center;
+            overflow-x: auto;
         }
 
-        .canvas-container { position: relative; display: inline-block; border: 2px solid #555; box-shadow: 0 4px 10px rgba(0,0,0,0.15); background: white; }
+        .canvas-container { position: relative; display: inline-block; border: 2px solid #555; box-shadow: 0 4px 10px rgba(0,0,0,0.15); background: white; max-width: 100%; }
+        canvas { max-width: 100%; height: auto !important; }
         .draggable-box {
             position: absolute; width: 200px; min-height: 50px; border: 2px dashed #007bff;
             background: rgba(255, 255, 255, 0.95); cursor: move; user-select: none; padding: 8px;
             font-size: 11px; font-weight: bold; color: #111; text-align: left; border-radius: 4px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.2);
             z-index: 10;
+            touch-action: none;
         }
         .config-group { margin-bottom: 15px; }
-        .success { background-color: #e6ffed; border: 1px solid #b7eb8f; padding: 15px; margin-top: 20px; border-radius: 6px; text-align: center; }
+        .success { background-color: #e6ffed; border: 1px solid #b7eb8f; padding: 20px; margin-top: 20px; border-radius: 6px; text-align: center; word-break: break-all; }
+        
+        /* WhatsApp Share Styling */
+        .whatsapp-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background-color: #25d366;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 16px;
+            text-decoration: none;
+            margin-top: 15px;
+            box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+            transition: background-color 0.2s;
+        }
+        .whatsapp-btn:hover {
+            background-color: #1ebe5d;
+        }
+        .share-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
@@ -93,14 +130,14 @@ CREATOR_HTML = """
             <div class="global-box-builder">
                 <h3>🏷️ Global Info Box Fields</h3>
                 <div id="fields-container"></div>
-                <button type="button" onclick="addHeaderField('NAME', 'KHALID KHAN')" style="background-color: #17a2b8; padding: 8px 14px; font-size: 13px;">+ Add Field</button>
+                <button type="button" onclick="addHeaderField('NAME', 'KHALID KHAN')" style="background-color: #17a2b8; padding: 8px 14px; font-size: 13px; width: auto;">+ Add Field</button>
             </div>
 
             <h2>📌 3. Page-By-Page Independent Setup</h2>
             <div id="pages-wrapper"></div>
 
             <br>
-            <button type="button" onclick="submitConfiguration()" style="background-color: #28a745; font-size: 17px; width: 85%;">Generate Shareable Link</button>
+            <button type="button" onclick="submitConfiguration()" style="background-color: #28a745; font-size: 17px; width: 85%; max-width: 400px;">Generate Shareable Link</button>
         </form>
         {% endif %}
 
@@ -108,7 +145,15 @@ CREATOR_HTML = """
         <div class="success">
             <h3>✅ Shareable Link Created!</h3>
             <p>Send this link to your classmate to personalize & download:</p>
-            <input type="text" value="{{ share_url }}" readonly onclick="this.select()" style="text-align: center; font-weight: bold; color: #007bff;">
+            <div class="share-row">
+                <input type="text" id="share-link-input" value="{{ share_url }}" readonly onclick="this.select()" style="text-align: center; font-weight: bold; color: #007bff; flex: 1; min-width: 250px; background: #fff; margin: 0;">
+                <button type="button" onclick="copyShareLink()" style="background-color: #6c757d; padding: 10px 16px; width: auto; font-size: 14px;">Copy Link</button>
+            </div>
+            <br>
+            <a href="https://api.whatsapp.com/send?text=Hey!%20Fill%20out%20your%20practical%20file%20using%20this%20link:%20{{ share_url }}" target="_blank" class="whatsapp-btn">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                Share via WhatsApp
+            </a>
         </div>
         {% endif %}
     </div>
@@ -126,14 +171,22 @@ CREATOR_HTML = """
         }
     };
 
+    function copyShareLink() {
+        const input = document.getElementById('share-link-input');
+        input.select();
+        input.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(input.value);
+        alert("Link copied to clipboard!");
+    }
+
     function addHeaderField(labelVal = "", sampleVal = "") {
         const container = document.getElementById('fields-container');
         const row = document.createElement('div');
         row.className = 'field-row';
         row.innerHTML = `
-            <input type="text" class="field-label" placeholder="Field Label (e.g. CLASS)" value="${labelVal}" style="flex: 1;" oninput="updatePreviewBox()">
-            <input type="text" class="field-sample" placeholder="Sample Value (e.g. TY BTECH)" value="${sampleVal}" style="flex: 1.5;" oninput="updatePreviewBox()">
-            <button type="button" onclick="this.parentElement.remove(); updatePreviewBox();" style="background-color: #dc3545; padding: 8px 12px; font-size: 12px;">X</button>
+            <input type="text" class="field-label" placeholder="Field Label (e.g. CLASS)" value="${labelVal}" style="flex: 1; min-width: 120px;" oninput="updatePreviewBox()">
+            <input type="text" class="field-sample" placeholder="Sample Value (e.g. TY BTECH)" value="${sampleVal}" style="flex: 1.5; min-width: 140px;" oninput="updatePreviewBox()">
+            <button type="button" onclick="this.parentElement.remove(); updatePreviewBox();" style="background-color: #dc3545; padding: 8px 12px; font-size: 12px; width: auto;">X</button>
         `;
         container.appendChild(row);
         updatePreviewBox();
@@ -256,23 +309,56 @@ CREATOR_HTML = """
     function initDragBox(pageNum) {
         const dragBox = document.getElementById(`drag-box-${pageNum}`);
         const container = document.getElementById(`container-${pageNum}`);
-        let isDragging = false, offsetX, offsetY;
+        let isDragging = false, startX, startY, initialLeft, initialTop;
 
-        dragBox.addEventListener('mousedown', (e) => {
+        function startDrag(clientX, clientY) {
             isDragging = true;
-            offsetX = e.clientX - dragBox.offsetLeft;
-            offsetY = e.clientY - dragBox.offsetTop;
-        });
+            startX = clientX;
+            startY = clientY;
+            initialLeft = dragBox.offsetLeft;
+            initialTop = dragBox.offsetTop;
+            dragBox.style.zIndex = 1000;
+        }
 
-        document.addEventListener('mousemove', (e) => {
+        function onDrag(clientX, clientY) {
             if (!isDragging) return;
-            let left = Math.max(0, Math.min(e.clientX - offsetX, container.clientWidth - dragBox.clientWidth));
-            let top = Math.max(0, Math.min(e.clientY - offsetY, container.clientHeight - dragBox.clientHeight));
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            let left = Math.max(0, Math.min(initialLeft + dx, container.clientWidth - dragBox.clientWidth));
+            let top = Math.max(0, Math.min(initialTop + dy, container.clientHeight - dragBox.clientHeight));
             dragBox.style.left = left + 'px';
             dragBox.style.top = top + 'px';
-        });
+        }
 
-        document.addEventListener('mouseup', () => isDragging = false);
+        function stopDrag() {
+            isDragging = false;
+            dragBox.style.zIndex = 10;
+        }
+
+        // Mouse events
+        dragBox.addEventListener('mousedown', (e) => {
+            startDrag(e.clientX, e.clientY);
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', (e) => onDrag(e.clientX, e.clientY));
+        document.addEventListener('mouseup', stopDrag);
+
+        // Touch events for full mobile support
+        dragBox.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                onDrag(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', stopDrag);
     }
 
     function togglePageHeader(pageNum) {
@@ -321,6 +407,7 @@ STUDENT_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personalize Your Document</title>
     <script>
@@ -335,8 +422,8 @@ STUDENT_HTML = """
         }
     </script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 550px; margin: 40px auto; padding: 20px; color: #333; }
-        .card { border: 1px solid #ccc; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background: #fff; }
+        body { font-family: Arial, sans-serif; max-width: 550px; margin: 20px auto; padding: 15px; color: #333; box-sizing: border-box; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background: #fff; box-sizing: border-box; }
         input[type="text"] { width: 100%; padding: 10px; margin: 6px 0 15px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #28a745; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; }
         button:hover { background-color: #218838; }
@@ -348,7 +435,7 @@ STUDENT_HTML = """
 <body>
     <div class="card">
         <h2>📝 Personalize Your PDF</h2>
-        <form action="/doc/{{ doc_id }}/download" method="post">
+        <form action="/doc/{{ doc_id }}/process" method="post">
             
             {% if has_header and header_fields %}
             <div class="header-box">
@@ -378,8 +465,54 @@ STUDENT_HTML = """
                 {% endif %}
             {% endfor %}
             
-            <button type="submit">Download Final PDF</button>
+            <button type="submit">Generate My PDF</button>
         </form>
+    </div>
+</body>
+</html>
+"""
+
+SUCCESS_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your PDF is Ready!</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 550px; margin: 30px auto; padding: 15px; color: #333; text-align: center; box-sizing: border-box; }
+        .card { border: 1px solid #ccc; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background: #fff; box-sizing: border-box; }
+        .success-icon { font-size: 50px; margin-bottom: 10px; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 5px; font-weight: bold; font-size: 16px; text-decoration: none; box-sizing: border-box; margin-top: 15px; cursor: pointer; text-align: center; }
+        .btn-download { background-color: #28a745; color: white; }
+        .btn-download:hover { background-color: #218838; }
+        .whatsapp-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background-color: #25d366;
+            color: white;
+            box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+            transition: background-color 0.2s;
+        }
+        .whatsapp-btn:hover {
+            background-color: #1ebe5d;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="success-icon">🎉</div>
+        <h2>Your Personalized PDF is Ready!</h2>
+        <p style="color: #666; font-size: 0.95em;">You can download your customized file below or share this exact custom PDF with your friends via WhatsApp!</p>
+
+        <a href="/doc/{{ doc_id }}/download/{{ file_token }}" class="btn btn-download">📥 Download Personalized PDF</a>
+
+        <a href="https://api.whatsapp.com/send?text=Hey!%20Check%20out%20my%20personalized%20practical%20file%20generated%20via%20Dropy:%20{{ download_url }}" target="_blank" class="btn whatsapp-btn">
+            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+            Share PDF via WhatsApp
+        </a>
     </div>
 </body>
 </html>
@@ -404,7 +537,8 @@ def upload():
     TEMPLATES[doc_id] = {
         "pdf_bytes": file_bytes,
         "pages_text": pages_text,
-        "total_pages": len(pages_text)
+        "total_pages": len(pages_text),
+        "generated_files": {}
     }
     
     b64_pdf = base64.b64encode(file_bytes).decode('utf-8')
@@ -466,7 +600,6 @@ class NumberedCanvas(pdf_canvas.Canvas):
         self._startPage()
 
     def save(self):
-        num_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
             self.draw_page_decorations()
@@ -497,19 +630,10 @@ class NumberedCanvas(pdf_canvas.Canvas):
                 self.drawString(pdf_x + 8, current_y, f"{field.upper()}: {val}")
                 current_y -= 13
 
-@app.route("/doc/<doc_id>/download", methods=["POST"])
-def download_file(doc_id):
-    if doc_id not in TEMPLATES:
-        return "Document not found!", 404
-        
-    template_data = TEMPLATES[doc_id]
+def build_personalized_pdf(template_data):
     page_configs = template_data.get("page_configs", {})
     header_fields = template_data.get("header_fields", ["NAME", "ROLL NO"])
-    
-    header_field_vals = {}
-    for i, field in enumerate(header_fields):
-        header_field_vals[i] = request.form.get(f"header_field_{i}", "")
-
+    header_field_vals = template_data.get("header_field_vals", {})
     pages_text = template_data["pages_text"].copy()
 
     for page_num_str, cfg in page_configs.items():
@@ -517,7 +641,7 @@ def download_file(doc_id):
         if 0 <= page_idx < len(pages_text):
             targets = cfg.get("targets", [])
             for t_idx, target in enumerate(targets):
-                replacement_value = request.form.get(f"rep_{page_num_str}_{t_idx}", "")
+                replacement_value = template_data.get("replacements", {}).get(f"{page_num_str}_{t_idx}", "")
                 if target and replacement_value:
                     pages_text[page_idx] = re.sub(re.escape(target), replacement_value, pages_text[page_idx], flags=re.IGNORECASE)
 
@@ -551,15 +675,59 @@ def download_file(doc_id):
 
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
+    return buffer.read()
 
-    clean_filename = header_field_vals.get(0, "student").replace(' ', '_')
+@app.route("/doc/<doc_id>/process", methods=["POST"])
+def process_student_form(doc_id):
+    if doc_id not in TEMPLATES:
+        return "Document not found!", 404
+        
+    template_data = TEMPLATES[doc_id]
+    header_fields = template_data.get("header_fields", ["NAME", "ROLL NO"])
+    
+    header_field_vals = {}
+    for i, field in enumerate(header_fields):
+        header_field_vals[i] = request.form.get(f"header_field_{i}", "")
+        
+    replacements = {}
+    page_configs = template_data.get("page_configs", {})
+    for page_num_str, cfg in page_configs.items():
+        targets = cfg.get("targets", [])
+        for t_idx, target in enumerate(targets):
+            replacements[f"{page_num_str}_{t_idx}"] = request.form.get(f"rep_{page_num_str}_{t_idx}", "")
+
+    file_token = str(uuid.uuid4())[:8]
+    
+    temp_storage = template_data.copy()
+    temp_storage["header_field_vals"] = header_field_vals
+    temp_storage["replacements"] = replacements
+    
+    pdf_bytes = build_personalized_pdf(temp_storage)
+    
+    if "generated_files" not in TEMPLATES[doc_id]:
+        TEMPLATES[doc_id]["generated_files"] = {}
+    TEMPLATES[doc_id]["generated_files"][file_token] = pdf_bytes
+
+    download_url = f"{request.host_url}doc/{doc_id}/download/{file_token}"
+    return render_template_string(
+        SUCCESS_HTML,
+        doc_id=doc_id,
+        file_token=file_token,
+        download_url=download_url
+    )
+
+@app.route("/doc/<doc_id>/download/<file_token>", methods=["GET"])
+def download_personalized_file(doc_id, file_token):
+    if doc_id not in TEMPLATES or file_token not in TEMPLATES[doc_id].get("generated_files", {}):
+        return "File not found or expired!", 404
+    
+    pdf_bytes = TEMPLATES[doc_id]["generated_files"][file_token]
     return send_file(
-        buffer,
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
         as_attachment=True,
-        download_name=f"edited_{clean_filename}.pdf",
-        mimetype="application/pdf"
+        download_name="personalized_practical.pdf"
     )
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)
