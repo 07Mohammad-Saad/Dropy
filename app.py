@@ -11,6 +11,7 @@ import re
 import json
 import base64
 import os
+import time
 
 app = Flask(__name__)
 
@@ -549,27 +550,42 @@ def create_link():
     doc_id = request.form["doc_id"]
     configs_json = request.form.get("page_configs_json", "{}")
     fields_json = request.form.get("header_fields_json", "[]")
-    
+
     try:
         page_configs = json.loads(configs_json)
         header_fields = json.loads(fields_json)
     except Exception:
         page_configs = {}
         header_fields = ["NAME", "ROLL NO"]
-    
+
     if doc_id in TEMPLATES:
         TEMPLATES[doc_id]["page_configs"] = page_configs
         TEMPLATES[doc_id]["header_fields"] = header_fields
+
+        # Link expires after 48 hours
+        TEMPLATES[doc_id]["expires_at"] = time.time() + (48 * 60 * 60)
+
         share_url = f"{request.host_url}doc/{doc_id}"
-        return render_template_string(CREATOR_HTML, share_url=share_url)
-    
+
+        return render_template_string(
+            CREATOR_HTML,
+            share_url=share_url
+        )
+
     return "Session expired. Please re-upload.", 400
 
 @app.route("/doc/<doc_id>", methods=["GET"])
 def student_view(doc_id):
     if doc_id not in TEMPLATES:
         return "Document link not found or expired!", 404
-    
+
+    # Check whether the 48-hour link has expired
+    expires_at = TEMPLATES[doc_id].get("expires_at")
+
+    if expires_at and time.time() >= expires_at:
+        del TEMPLATES[doc_id]
+        return "This document link has expired after 48 hours.", 410
+
     template_data = TEMPLATES[doc_id]
     page_configs = template_data.get("page_configs", {})
     header_fields = template_data.get("header_fields", ["NAME", "ROLL NO"])
