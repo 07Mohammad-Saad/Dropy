@@ -1,208 +1,383 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DriveSaver App</title>
-  <style>
-    :root {
-      --bg-color: #0f172a;
-      --card-bg: #1e293b;
-      --accent-color: #38bdf8;
-      --accent-hover: #0284c7;
-      --text-color: #f8fafc;
-      --text-muted: #94a3b8;
-      --input-bg: #0f172a;
-      --border-color: #334155;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Multi-Page PDF Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #eef2f5; margin: 0; padding: 15px; color: #333; text-align: center; box-sizing: border-box; }
+        .card { background: white; max-width: 1080px; margin: 0 auto; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
+        input[type="text"], input[type="file"] { width: 90%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 15px; }
+        button:hover { background-color: #0056b3; }
+        
+        .global-box-builder { background: #eef6ff; border: 1px solid #b6d4fe; border-radius: 8px; padding: 20px; margin-bottom: 25px; text-align: left; }
+        .field-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+        
+        .page-editor-block { 
+            background: #ffffff; 
+            border: 2px solid #dcdfe6; 
+            border-radius: 8px; 
+            margin: 25px 0; 
+            padding: 20px; 
+            text-align: left; 
+        }
+        .page-header { background: #007bff; color: white; padding: 8px 15px; border-radius: 5px; font-weight: bold; margin-bottom: 15px; display: inline-block; }
+        
+        .page-editor-grid {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .left-controls {
+            flex: 1;
+            min-width: 250px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        .right-preview {
+            flex: 1.2;
+            min-width: 280px;
+            text-align: center;
+            overflow-x: auto;
+        }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    }
-
-    body {
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 16px; /* Optimized padding for small mobile devices */
-    }
-
-    .card {
-      background: var(--card-bg);
-      border-radius: 16px;
-      padding: 24px;
-      width: 100%;
-      max-width: 480px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border-color);
-    }
-
-    @media (min-width: 640px) {
-      .card {
-        padding: 32px;
-      }
-    }
-
-    .header {
-      margin-bottom: 24px;
-      text-align: center;
-    }
-
-    .header h2 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--text-color);
-      margin-bottom: 6px;
-    }
-
-    .header p {
-      color: var(--text-muted);
-      font-size: 0.875rem;
-    }
-
-    .form-group {
-      margin-bottom: 20px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--text-color);
-    }
-
-    /* 16px min-font size prevents iOS mobile safari auto-zoom on input focus */
-    input[type="text"], textarea {
-      width: 100%;
-      padding: 12px 14px;
-      background-color: var(--input-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      color: var(--text-color);
-      font-size: 16px; 
-      outline: none;
-      transition: all 0.2s ease;
-    }
-
-    input[type="text"]:focus, textarea:focus {
-      border-color: var(--accent-color);
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 120px;
-    }
-
-    button {
-      width: 100%;
-      padding: 14px;
-      background-color: var(--accent-color);
-      color: #0f172a;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      touch-action: manipulation;
-    }
-
-    button:hover {
-      background-color: var(--accent-hover);
-      color: #ffffff;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    #statusMessage {
-      margin-top: 16px;
-      text-align: center;
-      font-size: 0.875rem;
-      min-height: 20px;
-    }
-
-    .status-success { color: #4ade80; }
-    .status-loading { color: var(--accent-color); }
-    .status-error { color: #f87171; }
-  </style>
+        .canvas-container { position: relative; display: inline-block; border: 2px solid #555; box-shadow: 0 4px 10px rgba(0,0,0,0.15); background: white; max-width: 100%; }
+        canvas { max-width: 100%; height: auto !important; }
+        
+        /* Reduced by 40% from 200px to 120px */
+        .draggable-box {
+            position: absolute; width: 120px; min-height: 50px; border: 2px dashed #007bff;
+            background: rgba(255, 255, 255, 0.95); cursor: move; user-select: none; padding: 8px;
+            font-size: 11px; font-weight: bold; color: #111; text-align: left; border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            z-index: 10;
+            touch-action: none;
+        }
+        .config-group { margin-bottom: 15px; }
+        .success { background-color: #e6ffed; border: 1px solid #b7eb8f; padding: 20px; margin-top: 20px; border-radius: 6px; text-align: center; word-break: break-all; }
+        
+        .whatsapp-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background-color: #25d366;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 16px;
+            text-decoration: none;
+            margin-top: 15px;
+            box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+            transition: background-color 0.2s;
+        }
+        .whatsapp-btn:hover {
+            background-color: #1ebe5d;
+        }
+        .share-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
 </head>
 <body>
+    <div class="card">
+        <h2>📄 1. Upload Original PDF Document</h2>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".pdf" required><br><br>
+            <button type="submit">Upload & Open Editor</button>
+        </form>
 
-  <div class="card">
-    <div class="header">
-      <h2>DriveSaver</h2>
-      <p>Save notes & files directly to your Google Drive</p>
+        {% if pdf_b64 %}
+        <hr style="margin: 30px 0;">
+        <h2>📌 2. Configure Global Header Fields</h2>
+        <p style="color: #666; font-size: 0.95em;">Define information fields (Name, Roll No, Class, Year, etc.) for the info box:</p>
+
+        <form action="/create" method="post" id="editor-form" onsubmit="prepareFormData()">
+            <input type="hidden" name="doc_id" value="{{ doc_id }}">
+            <input type="hidden" name="page_configs_json" id="page_configs_json">
+            <input type="hidden" name="header_fields_json" id="header_fields_json">
+
+            <div class="global-box-builder">
+                <h3>🏷️ Global Info Box Fields</h3>
+                <div id="fields-container"></div>
+                <button type="button" onclick="addHeaderField('NAME', 'KHALID KHAN')" style="background-color: #17a2b8; padding: 8px 14px; font-size: 13px; width: auto;">+ Add Field</button>
+            </div>
+
+            <h2>📌 3. Page-By-Page Independent Setup</h2>
+            <div id="pages-wrapper"></div>
+
+            <br>
+            <button type="button" onclick="submitConfiguration()" style="background-color: #28a745; font-size: 17px; width: 85%; max-width: 400px;">Generate Shareable Link</button>
+        </form>
+        {% endif %}
+
+        {% if share_url %}
+        <div class="success">
+            <h3>✅ Shareable Link Created!</h3>
+            <p>Send this link to your classmate to personalize & download:</p>
+            <div class="share-row">
+                <input type="text" id="share-link-input" value="{{ share_url }}" readonly onclick="this.select()" style="text-align: center; font-weight: bold; color: #007bff; flex: 1; min-width: 250px; background: #fff; margin: 0;">
+                <button type="button" onclick="copyShareLink()" style="background-color: #6c757d; padding: 10px 16px; width: auto; font-size: 14px;">Copy Link</button>
+            </div>
+            <br>
+            <a href="https://api.whatsapp.com/send?text=Hey!%20Fill%20out%20your%20practical%20file%20using%20this%20link:%20{{ share_url }}" target="_blank" class="whatsapp-btn">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                Share via WhatsApp
+            </a>
+        </div>
+        {% endif %}
     </div>
 
-    <form id="uploadForm">
-      <div class="form-group">
-        <label for="fileName">File Name</label>
-        <input type="text" id="fileName" required placeholder="e.g. notes.txt">
-      </div>
+{% if pdf_b64 %}
+<script>
+    const pdfData = "data:application/pdf;base64,{{ pdf_b64 }}";
+    const totalPages = {{ total_pages }};
+    const scale = 0.85;
 
-      <div class="form-group">
-        <label for="fileContent">File Content</label>
-        <textarea id="fileContent" required placeholder="Type your text content here..."></textarea>
-      </div>
+    window.onload = function() {
+        if (document.getElementById('fields-container')) {
+            addHeaderField("NAME", "KHALID KHAN");
+            addHeaderField("ROLL NO", "10");
+        }
+    };
 
-      <button type="submit" id="submitBtn">Save to Drive</button>
-    </form>
+    function copyShareLink() {
+        const input = document.getElementById('share-link-input');
+        input.select();
+        input.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(input.value);
+        alert("Link copied to clipboard!");
+    }
 
-    <div id="statusMessage"></div>
-  </div>
+    function addHeaderField(labelVal = "", sampleVal = "") {
+        const container = document.getElementById('fields-container');
+        const row = document.createElement('div');
+        row.className = 'field-row';
+        row.innerHTML = `
+            <input type="text" class="field-label" placeholder="Field Label (e.g. CLASS)" value="${labelVal}" style="flex: 1; min-width: 120px;" oninput="updatePreviewBox()">
+            <input type="text" class="field-sample" placeholder="Sample Value (e.g. TY BTECH)" value="${sampleVal}" style="flex: 1.5; min-width: 140px;" oninput="updatePreviewBox()">
+            <button type="button" onclick="this.parentElement.remove(); updatePreviewBox();" style="background-color: #dc3545; padding: 8px 12px; font-size: 12px; width: auto;">X</button>
+        `;
+        container.appendChild(row);
+        updatePreviewBox();
+    }
 
-  <script>
-    const scriptURL = 'https://script.google.com/macros/s/AKfycbwh6nvWnzpm5hcIm_ZApjJVWF7ymDX_9dyVKDxBIjQRCiIfNW9zFNPyMz2O0Z-kIk1O/exec';
+    function updatePreviewBox() {
+        const labels = document.querySelectorAll('.field-label');
+        const samples = document.querySelectorAll('.field-sample');
+        
+        for (let i = 1; i <= totalPages; i++) {
+            const box = document.getElementById(`drag-box-content-${i}`);
+            if (!box) continue;
+            
+            let htmlText = "";
+            labels.forEach((lbl, idx) => {
+                const lName = lbl.value.trim() || "FIELD";
+                const sVal = samples[idx] ? samples[idx].value.trim() : "";
+                htmlText += `<div><b>${lName}:</b> ${sVal}</div>`;
+            });
+            box.innerHTML = htmlText;
+        }
+    }
 
-    document.getElementById('uploadForm').addEventListener('submit', function(e) {
-      e.preventDefault();
+    pdfjsLib.getDocument(pdfData).promise.then(pdf => {
+        const wrapper = document.getElementById('pages-wrapper');
 
-      const status = document.getElementById('statusMessage');
-      const btn = document.getElementById('submitBtn');
+        for (let i = 1; i <= totalPages; i++) {
+            const pageBlock = document.createElement('div');
+            pageBlock.className = 'page-editor-block';
+            pageBlock.id = `page-block-${i}`;
 
-      status.className = 'status-loading';
-      status.innerText = 'Uploading to Drive...';
-      btn.disabled = true;
+            let applyCheckboxHtml = '';
+            let page1AutoSync = '';
 
-      const payload = {
-        fileName: document.getElementById('fileName').value,
-        fileContent: document.getElementById('fileContent').value
-      };
+            if (i === 1) {
+                page1AutoSync = 'oninput="autoSyncPageOne(this.value)"';
+                applyCheckboxHtml = '<br><small style="color: #007bff; font-weight: bold;">⚡ Page 1 automatically cascades down to all pages.</small>';
+            } else {
+                applyCheckboxHtml = `
+                    <div style="margin-top: 6px;">
+                        <label style="font-size: 0.85em; color: #0056b3; cursor: pointer;">
+                            <input type="checkbox" id="apply_below_${i}" onclick="applyTextToBelow(${i})"> 
+                            <b>Apply this text to all pages below this one</b>
+                        </label>
+                    </div>
+                `;
+            }
 
-      fetch(scriptURL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(() => {
-        status.className = 'status-success';
-        status.innerText = '✓ Saved successfully to your Drive!';
-        document.getElementById('uploadForm').reset();
-      })
-      .catch(error => {
-        status.className = 'status-error';
-        status.innerText = '✕ Error saving file. Try again.';
-        console.error('Error:', error);
-      })
-      .finally(() => {
-        btn.disabled = false;
-      });
+            pageBlock.innerHTML = `
+                <div class="page-header">PAGE ${i} OF ${totalPages}</div>
+                
+                <div class="page-editor-grid">
+                    <div class="left-controls">
+                        <h4>⚙️ Page ${i} Settings</h4>
+                        
+                        <div class="config-group">
+                            <label>
+                                <input type="checkbox" id="header_enable_${i}" checked onchange="togglePageHeader(${i})">
+                                <b> Enable Header Box on Page ${i}</b>
+                            </label>
+                        </div>
+
+                        <div class="config-group">
+                            <label><b>Target Words to Replace on Page ${i}:</b></label><br>
+                            <input type="text" id="replacements_${i}" placeholder="e.g. sharma_ji_700" value="" ${page1AutoSync}>
+                            ${applyCheckboxHtml}
+                        </div>
+                    </div>
+
+                    <div class="right-preview">
+                        <p style="color: #666; font-size: 0.85em; margin: 0 0 5px 0;"><b>Drag Page ${i} header box to position:</b></p>
+                        <div class="canvas-container" id="container-${i}">
+                            <canvas id="pdf-render-${i}"></canvas>
+                            <div id="drag-box-${i}" class="draggable-box" style="top: 15px; left: 220px;">
+                                <div id="drag-box-content-${i}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            wrapper.appendChild(pageBlock);
+            renderPageCanvas(pdf, i);
+        }
+        updatePreviewBox();
     });
-  </script>
 
+    function autoSyncPageOne(val) {
+        for (let i = 2; i <= totalPages; i++) {
+            const input = document.getElementById(`replacements_${i}`);
+            if (input) input.value = val;
+        }
+    }
+
+    function applyTextToBelow(pageNum) {
+        const checkbox = document.getElementById(`apply_below_${pageNum}`);
+        if (checkbox.checked) {
+            const currentVal = document.getElementById(`replacements_${pageNum}`).value;
+            for (let i = pageNum + 1; i <= totalPages; i++) {
+                const input = document.getElementById(`replacements_${i}`);
+                if (input) input.value = currentVal;
+            }
+        }
+    }
+
+    function renderPageCanvas(pdf, pageNum) {
+        pdf.getPage(pageNum).then(page => {
+            const canvas = document.getElementById(`pdf-render-${pageNum}`);
+            const ctx = canvas.getContext('2d');
+            const viewport = page.getViewport({ scale: scale });
+
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            page.render({ canvasContext: ctx, viewport: viewport });
+            initDragBox(pageNum);
+        });
+    }
+
+    function initDragBox(pageNum) {
+        const dragBox = document.getElementById(`drag-box-${pageNum}`);
+        const container = document.getElementById(`container-${pageNum}`);
+        let isDragging = false, startX, startY, initialLeft, initialTop;
+
+        function startDrag(clientX, clientY) {
+            isDragging = true;
+            startX = clientX;
+            startY = clientY;
+            initialLeft = dragBox.offsetLeft;
+            initialTop = dragBox.offsetTop;
+            dragBox.style.zIndex = 1000;
+        }
+
+        function onDrag(clientX, clientY) {
+            if (!isDragging) return;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            let left = Math.max(0, Math.min(initialLeft + dx, container.clientWidth - dragBox.clientWidth));
+            let top = Math.max(0, Math.min(initialTop + dy, container.clientHeight - dragBox.clientHeight));
+            dragBox.style.left = left + 'px';
+            dragBox.style.top = top + 'px';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            dragBox.style.zIndex = 10;
+        }
+
+        dragBox.addEventListener('mousedown', (e) => {
+            startDrag(e.clientX, e.clientY);
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', (e) => onDrag(e.clientX, e.clientY));
+        document.addEventListener('mouseup', stopDrag);
+
+        dragBox.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                onDrag(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', stopDrag);
+    }
+
+    function togglePageHeader(pageNum) {
+        const checked = document.getElementById(`header_enable_${pageNum}`).checked;
+        document.getElementById(`drag-box-${pageNum}`).style.display = checked ? 'block' : 'none';
+    }
+
+    function submitConfiguration() {
+        const labels = document.querySelectorAll('.field-label');
+        const headerFields = [];
+        labels.forEach(lbl => {
+            const val = lbl.value.trim();
+            if (val) headerFields.push(val);
+        });
+        document.getElementById('header_fields_json').value = JSON.stringify(headerFields);
+
+        const configs = {};
+        for (let i = 1; i <= totalPages; i++) {
+            const enableHeader = document.getElementById(`header_enable_${i}`).checked;
+            const dragBox = document.getElementById(`drag-box-${i}`);
+            const replacementsRaw = document.getElementById(`replacements_${i}`).value;
+
+            const posX = parseFloat(dragBox.style.left || 220) / scale;
+            const posY = parseFloat(dragBox.style.top || 15) / scale;
+
+            const targets = replacementsRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+            configs[i] = {
+                enable_header: enableHeader,
+                pos_x: posX,
+                pos_y: posY,
+                targets: targets
+            };
+        }
+
+        document.getElementById('page_configs_json').value = JSON.stringify(configs);
+        document.getElementById('editor-form').submit();
+    }
+</script>
+{% endif %}
 </body>
 </html>
